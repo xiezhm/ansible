@@ -1,0 +1,144 @@
+- hosts: 172.16.100.1
+  tasks:
+#关闭selinux
+    - name: disable selinux
+      shell: setenforce 0
+
+    - name: sed disable selinux
+      lineinfile: 
+        path: /etc/selinux/config
+        regexp: '^SELINUX='
+        line: 'SELINUX=disabled'
+# cpoy jdk包和环境
+    - name: copy jdk_11
+      unarchive:
+        src: /opt/jdk1.8.0_121.tar.gz
+        dest: /usr/local
+
+    - name: add env
+      lineinfile:
+        path: /etc/profile
+        line: 'PATH=$PATH:/usr/local/jdk1.8.0_121/bin'
+
+# 配置文件句柄数
+    - name: add limit.config hard nofile
+      lineinfile:
+        path: /etc/security/limits.conf
+        line: '* hard nofile 655350'
+
+    - name: add limit.config soft nofile
+      lineinfile:
+        path: /etc/security/limits.conf
+        line: '* soft nofile 655350'
+
+    - name: add limit.config hard nproc
+      lineinfile:
+        path: /etc/security/limits.conf
+        line:  '* hard nproc 655350'
+
+    - name: add limit.config soft nproc
+      lineinfile:
+        path: /etc/security/limits.conf           
+        line: '* soft nproc 655350'
+
+# 配置内核参数
+# 防止放大攻击
+    - name: sysctl.conf
+      lineinfile:
+        path: /etc/sysctl.conf
+        line: net.ipv4.icmp_echo_ignore_broadcasts = 1
+
+# 开启syn洪水攻击保护
+    - name: sysctl.conf
+      lineinfile:
+        path: /etc/sysctl.conf
+        line: net.ipv4.tcp_syncookies = 1
+# tcp TIME_WAIT sockets 快速回收
+    - name: sysctl.conf
+      lineinfile:
+        path: /etc/sysctl.conf
+        line: net.ipv4.tcp_tw_recycle = 1
+# syn-recv 接受数量
+    - name: sysctl.conf
+      lineinfile:
+        path: /etc/sysctl.conf
+        line: net.ipv4.tcp_max_syn_backlog = 65535
+# keepalive 消息频度
+    - name: sysctl.conf
+      lineinfile:
+        path: /etc/sysctl.conf
+        line: net.ipv4.tcp_keepalive_time = 600
+# 开启重用，允许TIME-WAIT sockets重新用于新的TCP连接
+    - name: sysctl.conf
+      lineinfile:
+        path: /etc/sysctl.conf
+        line: net.ipv4.tcp_tw_reuse = 1
+
+# 网口接受包通过最大数目
+    - name: sysctl.conf
+      lineinfile:
+        path: /etc/sysctl.conf
+        line: net.core.netdev_max_backlog = 65535
+
+    - name: sysctl -p
+      shell: 'sysctl -p'
+
+# 安装vim等软件包
+    - name: yum
+      yum:
+        name: 'vim' 
+        state: latest
+
+    - name: yum
+      yum:
+        name: '@Development tools'
+        state: latest
+
+    - name: yum
+      yum:
+        name: 'bash-completion'
+        state: present
+
+# 安装zabbix内网监控-CENTOS(6)
+    - name: get zabbix-agent
+      yum: 
+        name: https://repo.zabbix.com/zabbix/3.4/rhel/7/x86_64/zabbix-agent-3.4.9-1.el7.x86_64.rpm #centos7
+        #name: https://repo.zabbix.com/zabbix/3.4/rhel/6/x86_64/zabbix-agent-3.4.9-1.el6.x86_64.rpm
+        state: present
+
+    - name: zabbix-service
+      lineinfile:
+        path: /etc/zabbix/zabbix_agentd.conf
+        regexp:  '^ServerActive='
+        line: 'ServerActive=172.16.100.20'
+
+    - name: zabbix-service
+      lineinfile:
+        path: /etc/zabbix/zabbix_agentd.conf
+        regexp: '^Server='
+        line: 'Server=172.16.100.20'
+
+    - name: zabbix-host
+      lineinfile:
+        path: /etc/zabbix/zabbix_agentd.conf
+        regexp: '^Hostname='
+        line: 'Hostname=DB-{{ inventory_hostname }}'
+
+#  centos 6
+#    - name:
+#      shell: 'chkconfig --level 2345 zabbix-agent on'
+
+# centos 7
+    - name:
+      systemd:
+        name: zabbix-agent
+        enabled: yes
+
+    - name: restart-zabbix-agent
+      service:
+        name: zabbix-agent
+        state: started
+
+# 重启检查
+#    - name: reboot
+#      shell: reboot
